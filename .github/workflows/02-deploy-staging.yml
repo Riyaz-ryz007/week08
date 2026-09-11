@@ -44,6 +44,20 @@ jobs:
             --dry-run=client \
             -o yaml | kubectl apply -f -
 
+      - name: Create ACR image pull secret
+        run: |
+          kubectl create secret docker-registry acr-pull-secret \
+            --namespace staging \
+            --docker-server=${{ vars.ACR_LOGIN_SERVER }} \
+            --docker-username="${{ secrets.ACR_USERNAME }}" \
+            --docker-password="${{ secrets.ACR_PASSWORD }}" \
+            --dry-run=client \
+            -o yaml | kubectl apply -f -
+
+          kubectl patch serviceaccount default \
+            -n staging \
+            -p '{"imagePullSecrets":[{"name":"acr-pull-secret"}]}'
+
       - name: Create PostgreSQL secret
         run: |
           kubectl create secret generic postgres-secret \
