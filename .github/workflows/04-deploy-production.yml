@@ -21,10 +21,10 @@ jobs:
       name: production
 
     steps:
-      - name: Checkout repository main branch
+      - name: Checkout tested commit
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Login to Azure
         uses: azure/login@v3
