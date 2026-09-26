@@ -143,8 +143,7 @@ jobs:
     needs:
       - backend-test
 
-    # Build, scan and push when code is pushed to main
-    # or when the workflow is manually triggered
+    # Run after push to main or manual workflow trigger
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
 
     strategy:
@@ -174,15 +173,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Login to Azure using the existing GitHub secret
       - name: Login to Azure
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      # Login to the Week 09 Azure Container Registry
       - name: Login to Azure Container Registry
         run: |
           az acr login --name ${{ vars.ACR_NAME }}
 
+      # Build each service image locally on the GitHub runner
       - name: Build Docker image
         run: |
           docker build \
@@ -190,6 +192,14 @@ jobs:
             -t ${{ vars.ACR_LOGIN_SERVER }}/${{ matrix.image }}:${{ github.sha }} \
             ./${{ matrix.service }}
 
+      # Authenticate Docker Scout using Docker Hub PAT
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Scan the built image for Critical and High vulnerabilities
       - name: Docker Scout vulnerability scan
         uses: docker/scout-action@v1
         with:
@@ -197,12 +207,14 @@ jobs:
           image: ${{ vars.ACR_LOGIN_SERVER }}/${{ matrix.image }}:${{ github.sha }}
           only-severities: critical,high
 
+      # Display Docker Scout remediation recommendations
       - name: Docker Scout recommendations
         uses: docker/scout-action@v1
         with:
           command: recommendations
           image: ${{ vars.ACR_LOGIN_SERVER }}/${{ matrix.image }}:${{ github.sha }}
 
+      # Push the scanned image to ACR
       - name: Push Docker image with commit SHA
         run: |
           docker push \
