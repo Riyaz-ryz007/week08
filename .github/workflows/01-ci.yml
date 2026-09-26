@@ -173,18 +173,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Login to Azure using the existing GitHub secret
       - name: Login to Azure
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # Login to the Week 09 Azure Container Registry
       - name: Login to Azure Container Registry
         run: |
           az acr login --name ${{ vars.ACR_NAME }}
 
-      # Build each service image locally on the GitHub runner
       - name: Build Docker image
         run: |
           docker build \
@@ -199,7 +196,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Scan the built image for Critical and High vulnerabilities
+      # Scan image for Critical and High vulnerabilities
       - name: Docker Scout vulnerability scan
         uses: docker/scout-action@v1
         with:
@@ -207,15 +204,51 @@ jobs:
           image: ${{ vars.ACR_LOGIN_SERVER }}/${{ matrix.image }}:${{ github.sha }}
           only-severities: critical,high
 
-      # Display Docker Scout remediation recommendations
+      # Display remediation recommendations
       - name: Docker Scout recommendations
         uses: docker/scout-action@v1
         with:
           command: recommendations
           image: ${{ vars.ACR_LOGIN_SERVER }}/${{ matrix.image }}:${{ github.sha }}
 
-      # Push the scanned image to ACR
+      # Push scanned image to Azure Container Registry
       - name: Push Docker image with commit SHA
         run: |
           docker push \
             ${{ vars.ACR_LOGIN_SERVER }}/${{ matrix.image }}:${{ github.sha }}
+
+
+  # =========================================================
+  # Monitoring Validation
+  # =========================================================
+  monitoring-validation:
+    name: Validate Prometheus and Grafana
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ vars.AKS_RESOURCE_GROUP }} \
+            --name ${{ vars.AKS_CLUSTER_NAME }} \
+            --overwrite-existing
+
+      - name: Verify monitoring namespace
+        run: |
+          kubectl get namespace monitoring
+
+      - name: Verify Prometheus and Grafana pods
+        run: |
+          kubectl get pods -n monitoring
+
+      - name: Verify monitoring services
+        run: |
+          kubectl get services -n monitoring
